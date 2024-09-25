@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8">
+  <title>CodePen - Untitled</title>
+  
+
+</head>
+<body>
+<!-- partial:index.partial.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>字灵汉字世界拼图游戏</title>
+    <style>
+        @font-face {
+            font-family: 'MaoBiFont';
+            src: url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap');
+        }
+        body {
+            font-family: 'MaoBiFont', 'Ma Shan Zheng', cursive;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        h1 {
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .puzzle-container {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            gap: 2px;
+            padding: 10px;
+            background-color: rgba(221, 221, 221, 0.8);
+            border-radius: 10px;
+        }
+        .puzzle-piece {
+            width: 100px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            background-color: rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .puzzle-piece:hover {
+            transform: scale(1.05);
+        }
+        .empty {
+            background-color: rgba(221, 221, 221, 0.5);
+        }
+        .controls {
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 0 5px;
+            font-family: 'MaoBiFont', 'Ma Shan Zheng', cursive;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            text-align: center;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #completeImage {
+            max-width: 100%;
+            height: auto;
+            margin-top: 20px;
+        }
+        #timer {
+            font-size: 24px;
+            margin-top: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        #leaderboard {
+            margin-top: 20px;
+            text-align: center;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #leaderboard h2 {
+            margin-bottom: 10px;
+        }
+        #leaderboard ol {
+            padding-left: 20px;
+        }
+        #uploadBackgroundBtn {
+            position: fixed;
+            left: 20px;
+            bottom: 20px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <h1>字灵汉字世界拼图游戏</h1>
+    <div id="timer">00:00</div>
+    <div class="puzzle-container" id="puzzle"></div>
+    <div class="controls">
+        <button onclick="uploadImage()">上传拼图图片</button>
+        <button id="startButton" onclick="startGame()">开始游戏</button>
+        <button onclick="shufflePuzzle()" disabled>打乱拼图</button>
+    </div>
+    <input type="file" id="imageUpload" style="display: none;" accept="image/*">
+    <input type="file" id="backgroundImageUpload" style="display: none;" accept="image/*">
+
+    <div id="leaderboard">
+        <h2>历史排行榜</h2>
+        <ol id="leaderboardList"></ol>
+    </div>
+
+    <button id="uploadBackgroundBtn" onclick="uploadBackgroundImage()">上传背景图片</button>
+
+    <div id="winModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>恭喜通关！</h2>
+            <p>你已经成功完成了拼图！</p>
+            <p id="finalTime"></p>
+            <img id="completeImage" src="" alt="完整拼图">
+        </div>
+    </div>
+
+    <script>
+        const puzzle = document.getElementById('puzzle');
+        const modal = document.getElementById('winModal');
+        const closeBtn = document.getElementsByClassName('close')[0];
+        const timerDisplay = document.getElementById('timer');
+        const startButton = document.getElementById('startButton');
+        const leaderboardList = document.getElementById('leaderboardList');
+        let emptyCell = 8;
+        let puzzleState = [1, 2, 3, 4, 5, 6, 7, 8, 0];
+        let puzzleImage = null;
+        let gameStarted = false;
+        let startTime;
+        let timerInterval;
+        let leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || [];
+
+        function createPuzzle() {
+            puzzle.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                const piece = document.createElement('div');
+                piece.className = 'puzzle-piece';
+                if (puzzleState[i] !== 0) {
+                    piece.textContent = puzzleState[i];
+                    piece.style.color = 'rgba(0, 0, 0, 0.05)';  // 设置数字透明度为5%
+                    if (puzzleImage) {
+                        const x = ((puzzleState[i] - 1) % 3) * 100;
+                        const y = Math.floor((puzzleState[i] - 1) / 3) * 100;
+                        piece.style.backgroundImage = `url(${puzzleImage})`;
+                        piece.style.backgroundPosition = `-${x}px -${y}px`;
+                    }
+                } else {
+                    piece.className += ' empty';
+                    emptyCell = i;
+                }
+                piece.addEventListener('click', () => movePiece(i));
+                puzzle.appendChild(piece);
+            }
+        }
+
+        function movePiece(index) {
+            if (!gameStarted) return;
+            const row = Math.floor(index / 3);
+            const col = index % 3;
+            const emptyRow = Math.floor(emptyCell / 3);
+            const emptyCol = emptyCell % 3;
+
+            if ((Math.abs(row - emptyRow) === 1 && col === emptyCol) ||
+                (Math.abs(col - emptyCol) === 1 && row === emptyRow)) {
+                puzzleState[emptyCell] = puzzleState[index];
+                puzzleState[index] = 0;
+                emptyCell = index;
+                createPuzzle();
+                checkWin();
+            }
+        }
+
+        function shufflePuzzle() {
+            do {
+                puzzleState = [...Array(9).keys()].sort(() => Math.random() - 0.5);
+            } while (!isSolvable(puzzleState));
+            createPuzzle();
+        }
+
+        function isSolvable(puzzle) {
+            let inversions = 0;
+            for (let i = 0; i < 9; i++) {
+                if (puzzle[i] === 0) continue;
+                for (let j = i + 1; j < 9; j++) {
+                    if (puzzle[j] === 0) continue;
+                    if (puzzle[i] > puzzle[j]) inversions++;
+                }
+            }
+            return inversions % 2 === 0;
+        }
+
+        function checkWin() {
+            if (puzzleState.every((value, index) => value === (index + 1) % 9)) {
+                clearInterval(timerInterval);
+                const finalTime = new Date() - startTime;
+                updateLeaderboard(finalTime);
+                showWinModal(finalTime);
+            }
+        }
+
+        function showWinModal(finalTime) {
+            const completeImage = document.getElementById('completeImage');
+            completeImage.src = puzzleImage;
+            document.getElementById('finalTime').textContent = `完成时间: ${formatTime(finalTime)}`;
+            modal.style.display = 'block';
+        }
+
+        closeBtn.onclick = function() {
+            modal.style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        function uploadImage() {
+            document.getElementById('imageUpload').click();
+        }
+
+        document.getElementById('imageUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                puzzleImage = event.target.result;
+                createPuzzle();
+            }
+            reader.readAsDataURL(file);
+        });
+
+        function uploadBackgroundImage() {
+            document.getElementById('backgroundImageUpload').click();
+        }
+
+        document.getElementById('backgroundImageUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                document.body.style.backgroundImage = `url(${event.target.result})`;
+            }
+            reader.readAsDataURL(file);
+        });
+
+        function startGame() {
+            if (!gameStarted) {
+                gameStarted = true;
+                startTime = new Date();
+                timerInterval = setInterval(updateTimer, 1000);
+                shufflePuzzle();
+                startButton.textContent = "重新开始";
+                document.querySelector('button[onclick="shufflePuzzle()"]').disabled = false;
+            } else {
+                resetGame();
+            }
+        }
+
+        function resetGame() {
+            clearInterval(timerInterval);
+            gameStarted = false;
+            timerDisplay.textContent = "00:00";
+            puzzleState = [1, 2, 3, 4, 5, 6, 7, 8, 0];
+            createPuzzle();
+            startButton.textContent = "开始游戏";
+            document.querySelector('button[onclick="shufflePuzzle()"]').disabled = true;
+        }
+
+        function updateTimer() {
+            const currentTime = new Date();
+            const elapsedTime = new Date(currentTime - startTime);
+            timerDisplay.textContent = formatTime(elapsedTime);
+        }
+
+        function formatTime(time) {
+            const minutes = Math.floor(time / 60000).toString().padStart(2, '0');
+            const seconds = Math.floor((time % 60000) / 1000).toString().padStart(2, '0');
+            return `${minutes}:${seconds}`;
+        }
+
+        function updateLeaderboard(time) {
+            leaderboard.push(time);
+            leaderboard.sort((a, b) => a - b);
+            leaderboard = leaderboard.slice(0, 5);
+            localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+            displayLeaderboard();
+        }
+
+        function displayLeaderboard() {
+            leaderboardList.innerHTML = '';
+            leaderboard.forEach((time, index) => {
+                const li = document.createElement('li');
+                li.textContent = formatTime(time);
+                leaderboardList.appendChild(li);
+            });
+        }
+
+        createPuzzle();
+        displayLeaderboard();
+    </script>
+</body>
+</html>
+<!-- partial -->
+  
+</body>
+</html>
